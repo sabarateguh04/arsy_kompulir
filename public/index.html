@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Kompulir Harian</title>
+  <link rel="stylesheet" href="/css/app.css">
+</head>
+<body>
+  <header class="mast">
+    <div class="wrap mast-inner">
+      <div class="brand">
+        <span class="mark" aria-hidden="true"></span>
+        <div>
+          <p class="eyebrow">ARSY · Master Data</p>
+          <h1>Kompulir Harian</h1>
+        </div>
+      </div>
+      <div class="mast-side">
+        <p class="lede">Kelengkapan data harian per kategori, pada level Polres atau Polda.</p>
+        <p class="mast-date" id="mast-date">Memeriksa tanggal database…</p>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <form id="filters" class="panel filters">
+      <div class="filters-grid">
+        <label class="field">
+          <span>Tanggal</span>
+          <input id="tanggal" name="tanggal" type="date" required>
+        </label>
+        <label class="field">
+          <span>Kategori</span>
+          <select id="kategori" name="kategori">
+            <option value="">Semua Kategori</option>
+          </select>
+        </label>
+        <div class="field">
+          <span>Level</span>
+          <div class="segment" role="group" aria-label="Level wilayah">
+            <button type="button" data-level="polres" aria-pressed="true">Polres</button>
+            <button type="button" data-level="polda" aria-pressed="false">Polda</button>
+          </div>
+        </div>
+        <button class="primary" id="submit-btn" type="submit">Tampilkan</button>
+      </div>
+    </form>
+
+    <div id="loadbar" class="loadbar" hidden></div>
+    <div id="alert" class="alert" role="alert" hidden></div>
+
+    <p class="result-line" id="result-line" aria-live="polite"></p>
+
+    <section class="kpis" aria-label="Ringkasan">
+      <article class="kpi total">
+        <p>Total baris data</p>
+        <b id="kpi-total">—</b>
+        <span id="kpi-total-note">SUM(total_rows)</span>
+        <div class="meter" aria-hidden="true"><i></i></div>
+      </article>
+      <article class="kpi sudah">
+        <p>Sudah kompulir</p>
+        <b id="kpi-sudah">—</b>
+        <span id="kpi-sudah-note">entitas berstatus sudah</span>
+        <div class="meter" aria-hidden="true"><i id="meter-sudah"></i></div>
+      </article>
+      <article class="kpi belum">
+        <p>Belum kompulir</p>
+        <b id="kpi-belum">—</b>
+        <span id="kpi-belum-note">entitas berstatus belum</span>
+        <div class="meter" aria-hidden="true"><i id="meter-belum"></i></div>
+      </article>
+    </section>
+
+    <section class="charts" aria-label="Grafik">
+      <article class="panel chart-card">
+        <header class="card-head">
+          <h2 id="chart-title">Total baris</h2>
+          <p id="chart-sub">Perbandingan total_rows</p>
+        </header>
+        <div class="chart-box" id="bar-box">
+          <canvas id="chart-bar" aria-label="Grafik total baris"></canvas>
+        </div>
+        <p id="chart-empty" class="empty" hidden>Belum ada data untuk digambar.</p>
+      </article>
+
+      <article class="panel chart-card">
+        <header class="card-head">
+          <h2>Status kompulir</h2>
+          <p>Klik irisan atau daftar untuk menyaring tabel</p>
+        </header>
+        <div class="donut-layout" id="donut-layout">
+          <div class="donut-wrap">
+            <canvas id="chart-status" aria-label="Grafik komposisi status"></canvas>
+            <div class="donut-center">
+              <strong id="status-rate">—</strong>
+              <span>sudah</span>
+            </div>
+          </div>
+          <ul class="status-key">
+            <li>
+              <button type="button" class="status-pick" data-status="sudah">
+                <span><i class="swatch sudah"></i> Sudah</span>
+                <strong id="legend-sudah">—</strong>
+              </button>
+            </li>
+            <li>
+              <button type="button" class="status-pick" data-status="belum">
+                <span><i class="swatch belum"></i> Belum</span>
+                <strong id="legend-belum">—</strong>
+              </button>
+            </li>
+          </ul>
+        </div>
+        <p id="status-empty" class="empty" hidden>Tidak ada entitas pada filter ini.</p>
+      </article>
+    </section>
+
+    <section class="panel table-panel" aria-label="Tabel data">
+      <div class="section-head">
+        <h2>Rincian data</h2>
+        <p id="range-label">Menunggu data.</p>
+      </div>
+
+      <div class="toolbar">
+        <input id="search" type="search" placeholder="Cari Polda, Polres, atau kategori" autocomplete="off">
+        <div class="segment" role="group" aria-label="Filter status tabel">
+          <button type="button" data-status="all" aria-pressed="true">Semua <em id="count-all">0</em></button>
+          <button type="button" data-status="sudah" aria-pressed="false">Sudah <em id="count-sudah">0</em></button>
+          <button type="button" data-status="belum" aria-pressed="false">Belum <em id="count-belum">0</em></button>
+        </div>
+        <label class="page-size">
+          <span>Baris</span>
+          <select id="page-size">
+            <option value="25" selected>25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+        </label>
+        <button type="button" class="export" id="export-btn" disabled>Ekspor CSV</button>
+      </div>
+
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th scope="col" aria-sort="none"><button type="button" data-sort="tanggal">Tanggal <span class="arrow"></span></button></th>
+              <th scope="col" aria-sort="ascending"><button type="button" data-sort="polda">Polda <span class="arrow">↑</span></button></th>
+              <th scope="col" aria-sort="none"><button type="button" data-sort="polres">Polres <span class="arrow"></span></button></th>
+              <th scope="col" aria-sort="none"><button type="button" data-sort="kategori">Kategori <span class="arrow"></span></button></th>
+              <th scope="col" aria-sort="none"><button type="button" data-sort="total_rows">Total baris <span class="arrow"></span></button></th>
+              <th scope="col" aria-sort="none"><button type="button" data-sort="status_kompulir">Status <span class="arrow"></span></button></th>
+            </tr>
+          </thead>
+          <tbody id="tbody">
+            <tr><td class="empty-row" colspan="6">Data belum dimuat.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="pager" id="pager"></div>
+    </section>
+  </main>
+
+  <script src="/vendor/chart.umd.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

@@ -1,0 +1,26 @@
+/** 19 kategori pada master_sumber di get_daily_kompulir. */
+const CATEGORIES = [
+  'PANJANG JALAN',
+  'DRIVING LICENSE',
+  'RAWAN TINDAK PIDANA',
+  'RAWAN LANGGAR',
+  'PENDUDUK',
+  'BLACKSPOT',
+  'TROUBLESPOT',
+  'PEOPLE MOBILITY',
+  'RAWAN MACET / PERLAMBATAN',
+  'VEHICLE',
+  'TRAFFIC',
+  'RAWAN LAKA',
+  'ACCIDENT',
+  'RAWAN BENCANA',
+  'OBJECT VITAL',
+  'OPERATION CONTROL',
+  'CONTIGENCY SERVICE',
+  'MEDIA ACTIVITY',
+  'VIOLATION',
+];
+
+const LEVELS = ['polres', 'polda'];
+
+module.exports = { CATEGORIES, LEVELS };
