@@ -265,9 +265,10 @@
       return `<div class="polda-row"><span title="${esc(item.label)}">${esc(item.label)}</span><b>${fmt(item.filled.size)}/${fmt(model.kategoriCount)}</b>${bar(ratio)}</div>`;
     }).join('');
 
-    const tableRows = model.categories.map((item) => {
+    const tableRows = model.categories.map((item, index) => {
       const ratio = model.poldaCount ? item.polda.size / model.poldaCount : 0;
-      return `<tr><td>${esc(item.label)}</td><td>${fmt(item.input)}</td><td>${fmt(item.polda.size)}/${fmt(model.poldaCount)}</td><td class="${coverageClass(ratio)}">${percent(item.polda.size, model.poldaCount, 1)}</td></tr>`;
+      const alt = index % 2 === 1 ? ' alt' : '';
+      return `<div class="ac${alt}">${esc(item.label)}</div><div class="ac n${alt}">${fmt(item.input)}</div><div class="ac n${alt}">${fmt(item.polda.size)}/${fmt(model.poldaCount)}</div><div class="ac n ${coverageClass(ratio)}${alt}">${percent(item.polda.size, model.poldaCount, 1)}</div>`;
     }).join('');
 
     const rankTables = ranks.map((list, side) => {
@@ -326,7 +327,13 @@
           <article class="card">
             <div class="band">${icon('table')} TABEL KETERSEDIAAN KATEGORI</div>
             <div class="card-body">
-              <table class="avail"><thead><tr><th>Kategori</th><th>Input</th><th>Polda</th><th>Coverage</th></tr></thead><tbody>${tableRows}</tbody></table>
+              <div class="avail-grid">
+                <div class="ah">Kategori</div>
+                <div class="ah n">Input</div>
+                <div class="ah n">Polda</div>
+                <div class="ah n">Coverage</div>
+                ${tableRows}
+              </div>
             </div>
           </article>
           <article class="card">
@@ -362,13 +369,6 @@
   }
 
   function fitTables(sheet) {
-    const avail = sheet.querySelector('.avail');
-    if (avail) {
-      const width = `${avail.parentElement.clientWidth}px`;
-      avail.style.width = width;
-      avail.style.maxWidth = width;
-      avail.style.minWidth = '0';
-    }
     const split = sheet.querySelector('.rank-split');
     if (!split) return;
     const column = `${Math.floor((split.clientWidth - 8) / 2)}px`;
