@@ -55,7 +55,11 @@
   }
 
   function poldaName(value) {
-    return titleCase(String(value || '—').replace(/^POLDA(?:\s+DAERAH)?\s+/i, ''));
+    const name = titleCase(String(value || '—').replace(/^POLDA(?:\s+DAERAH)?\s+/i, ''));
+    return name
+      .replace(/^Kepulauan Bangka Belitung$/i, 'Kep. Bangka Belitung')
+      .replace(/^Daerah Istimewa Yogyakarta$/i, 'DI Yogyakarta')
+      .replace(/^Di Yogyakarta$/i, 'DI Yogyakarta');
   }
 
   function categoryLabel(value) {
@@ -68,10 +72,8 @@
     return `${items.slice(0, -1).join(', ')} dan ${items[items.length - 1]}`;
   }
 
-  function green(ratio) {
-    const t = Math.max(0, Math.min(1, ratio));
-    const channel = (from, to) => Math.round(from + (to - from) * t);
-    return `rgb(${channel(167, 15)}, ${channel(214, 138)}, ${channel(176, 69)})`;
+  function strong(value) {
+    return `<b>${esc(value)}</b>`;
   }
 
   function icon(name) {
@@ -155,15 +157,15 @@
     const zeroCount = (byFill.get(0) || []).length;
 
     const distribution = positive.map(([count, list]) => (
-      `${fmt(list.length)} Polda mengisi ${fmt(count)} kategori`
+      `${strong(fmt(list.length))} Polda mengisi ${strong(fmt(count))} kategori`
     ));
-    if (zeroCount) distribution.push(`${fmt(zeroCount)} Polda belum mengisi satu pun kategori`);
+    if (zeroCount) distribution.push(`${strong(fmt(zeroCount))} Polda belum mengisi satu pun kategori`);
 
     const lengkapText = lengkap
-      ? `${fmt(lengkap)} dari ${fmt(poldaCount)} Polda mengisi seluruh kategori.`
+      ? `${strong(fmt(lengkap))} dari ${strong(fmt(poldaCount))} Polda mengisi seluruh kategori.`
       : 'Belum ada Polda yang mengisi seluruh kategori.';
-    const summary = poldaCount
-      ? `Dataset mencatat ${fmt(totalInput)} input dari ${fmt(poldaCount)} Polda pada ${fmt(kategoriCount)} kategori. Dari ${fmt(cells)} kombinasi Polda–kategori, ${fmt(filledCells)} sel berisi input dan ${fmt(cells - filledCells)} sel bernilai 0, sehingga keterisian sel mencapai ${percent(filledCells, cells, 1)}. ${lengkapText}${distribution.length ? ` ${joinList(distribution)}.` : ''}`
+    const summaryHtml = poldaCount
+      ? `Dataset mencatat ${strong(fmt(totalInput))} input dari ${strong(fmt(poldaCount))} Polda pada ${strong(fmt(kategoriCount))} kategori. Dari ${strong(fmt(cells))} kombinasi Polda–kategori, ${strong(fmt(filledCells))} sel berisi input dan ${strong(fmt(cells - filledCells))} sel bernilai 0, sehingga keterisian sel mencapai ${strong(percent(filledCells, cells, 1))}. ${lengkapText}${distribution.length ? ` ${joinList(distribution)}.` : ''}`
       : 'Belum ada data Polda pada tanggal ini.';
 
     const top = poldas[0];
@@ -181,19 +183,31 @@
       : 'Belum ada kategori yang terisi.';
 
     const insights = [
-      top && top.input
-        ? `INPUT TERTINGGI: POLDA ${top.label.toUpperCase()} — ${fmt(top.input)} input (${fmt(top.filled.size)}/${fmt(kategoriCount)} kategori).`
-        : 'INPUT TERTINGGI: belum ada input pada tanggal ini.',
-      maxFill
-        ? `KELENGKAPAN TERTINGGI: ${fmt(positive[0][1].length)} Polda mengisi ${fmt(maxFill)} dari ${fmt(kategoriCount)} kategori (${percent(maxFill, kategoriCount, 1)}).`
-        : 'KELENGKAPAN TERTINGGI: belum ada Polda yang mengisi kategori.',
-      zeroCount
-        ? `KELENGKAPAN TERENDAH: ${fmt(zeroCount)} Polda belum mengisi satu pun kategori.`
-        : `KELENGKAPAN TERENDAH: ${fmt((byFill.get(minFill) || []).length)} Polda mengisi ${fmt(minFill)} dari ${fmt(kategoriCount)} kategori (${percent(minFill, kategoriCount, 1)}).`,
-      low
-        ? `INPUT TERENDAH: Polda ${low.label} — ${fmt(low.input)} input.`
-        : 'INPUT TERENDAH: belum ada input pada tanggal ini.',
-      categoryLine,
+      {
+        label: 'INPUT TERTINGGI',
+        text: top && top.input
+          ? `POLDA ${top.label.toUpperCase()} — ${fmt(top.input)} input (${fmt(top.filled.size)}/${fmt(kategoriCount)} kategori).`
+          : 'belum ada input pada tanggal ini.',
+      },
+      {
+        label: 'KELENGKAPAN TERTINGGI',
+        text: maxFill
+          ? `${fmt(positive[0][1].length)} Polda mengisi ${fmt(maxFill)} dari ${fmt(kategoriCount)} kategori (${percent(maxFill, kategoriCount, 1)}).`
+          : 'belum ada Polda yang mengisi kategori.',
+      },
+      {
+        label: 'KELENGKAPAN TERENDAH',
+        text: zeroCount
+          ? `${fmt(zeroCount)} Polda belum mengisi satu pun kategori.`
+          : `${fmt((byFill.get(minFill) || []).length)} Polda hanya mengisi ${fmt(minFill)} dari ${fmt(kategoriCount)} kategori (${percent(minFill, kategoriCount, 1)}).`,
+      },
+      {
+        label: 'INPUT TERENDAH',
+        text: low
+          ? `Polda ${low.label} — ${fmt(low.input)} input nasional.`
+          : 'belum ada input pada tanggal ini.',
+      },
+      { label: '', text: categoryLine },
     ];
 
     return {
@@ -208,7 +222,7 @@
       lengkap,
       categories,
       poldas,
-      summary,
+      summaryHtml,
       insights,
     };
   }
@@ -226,8 +240,7 @@
 
   function bar(ratio) {
     const width = Math.max(0, Math.min(100, ratio * 100));
-    if (!width) return '<span class="track"><i style="width:0"></i></span>';
-    return `<span class="track"><i style="width:${width}%;background:${green(ratio)}"></i></span>`;
+    return `<span class="track"><i style="width:${width}%"></i></span>`;
   }
 
   function coverageClass(ratio) {
@@ -265,59 +278,67 @@
       return `<table class="rank-table"><thead><tr><th>#</th><th>Polda</th><th>Input</th><th>Kat.</th><th>%</th></tr></thead><tbody>${body}</tbody></table>`;
     }).join('');
 
+    const insightRows = model.insights.map((item) => (
+      `<p><i></i><span>${item.label ? `<b>${esc(item.label)}:</b> ` : ''}${esc(item.text)}</span></p>`
+    )).join('');
+
     return `<article class="sheet">
       <header class="banner">
-        <div class="banner-top">
-          <div class="brand-side" style="justify-content:flex-start;text-align:left">
-            ${crest()}
-            <div class="org"><strong>KORLANTAS POLRI</strong><span>Korps Lalu Lintas</span></div>
-          </div>
-          <div class="brand-side">
-            <div><strong>ARSY</strong><span>Algoritma Road Safety</span></div>
-            ${mark()}
-          </div>
+        <div class="brand-row">
+          ${crest()}
+          <div class="org"><strong>KORLANTAS POLRI</strong><span>Korps Lalu Lintas</span></div>
+          <span class="vbar"></span>
+          <div class="arsy-word">ARSY</div>
         </div>
         <h1>LAPORAN HARIAN</h1>
         <div class="ribbon">ALGORITMA ROAD SAFETY • ${esc(model.year)}</div>
         <p class="banner-sub">${fmt(model.poldaCount)} Polda | Kesiapan Input &amp; Kelengkapan Kategori</p>
       </header>
-      <section class="kpis">
-        <article class="kpi"><i>${icon('stack')}</i><div><b>${fmt(model.totalInput)}</b><span>Total input nasional</span></div></article>
-        <article class="kpi"><i>${icon('shield')}</i><div><b>${fmt(model.poldaCount)}</b><span>Polda dianalisis</span></div></article>
-        <article class="kpi"><i>${icon('layers')}</i><div><b>${fmt(model.kategoriCount)}</b><span>Kategori pada data</span></div></article>
-        <article class="kpi"><i>${icon('check')}</i><div><b>${percent(model.filledCells, model.cells, 1)}</b><span>Keterisian sel data</span></div></article>
-        <article class="kpi"><i>${icon('chart')}</i><div><b>${fmt(model.lengkap)}/${fmt(model.poldaCount)}</b><span>Polda mengisi semua</span></div></article>
-      </section>
-      <section class="summary">
-        <div class="band">${icon('note')} RINGKASAN EKSEKUTIF</div>
-        <p>${esc(model.summary)}</p>
-      </section>
-      <section class="cols">
-        <article class="card">
-          <div class="band">${icon('bars')} KETERSEDIAAN INPUT PER KATEGORI</div>
-          <div class="card-body">${categoryBars}</div>
-        </article>
-        <article class="card">
-          <div class="band">${icon('grid')} KELENGKAPAN KATEGORI PER POLDA</div>
-          <div class="card-body"><div class="polda-grid" style="grid-template-rows:repeat(${rows}, auto)">${poldaBars}</div></div>
-        </article>
-      </section>
-      <section class="bottom">
-        <article class="card">
-          <div class="band">${icon('table')} TABEL KETERSEDIAAN KATEGORI</div>
-          <div class="card-body">
-            <table class="avail"><thead><tr><th>Kategori</th><th>Input</th><th>Polda</th><th>Coverage</th></tr></thead><tbody>${tableRows}</tbody></table>
-          </div>
-        </article>
-        <article class="card">
-          <div class="band">${icon('rank')} RANKING INPUT PER POLDA</div>
-          <div class="card-body"><div class="rank-split">${rankTables}</div></div>
-        </article>
-      </section>
-      <section class="insight">
-        <div class="band">${icon('bulb')} INSIGHT</div>
-        <ul>${model.insights.map((item) => `<li>${esc(item)}</li>`).join('')}</ul>
-      </section>
+      <div class="body">
+        <section class="kpis">
+          <article class="kpi"><i>${icon('stack')}</i><div><b>${fmt(model.totalInput)}</b><span>Total input nasional</span></div></article>
+          <article class="kpi"><i>${icon('shield')}</i><div><b>${fmt(model.poldaCount)}</b><span>Polda dianalisis</span></div></article>
+          <article class="kpi"><i>${icon('layers')}</i><div><b>${fmt(model.kategoriCount)}</b><span>Kategori pada file</span></div></article>
+          <article class="kpi"><i>${icon('check')}</i><div><b>${percent(model.filledCells, model.cells, 1)}</b><span>Keterisian sel data</span></div></article>
+          <article class="kpi"><i>${icon('chart')}</i><div><b>${fmt(model.lengkap)}/${fmt(model.poldaCount)}</b><span>Polda mengisi<br>seluruh kategori</span></div></article>
+        </section>
+        <section class="summary">
+          <div class="band">${icon('note')} RINGKASAN EKSEKUTIF</div>
+          <p>${model.summaryHtml}</p>
+        </section>
+        <section class="cols">
+          <article class="card">
+            <div class="band">${icon('bars')} KETERSEDIAAN INPUT PER KATEGORI</div>
+            <div class="card-body">
+              <p class="note">Jumlah Polda dengan input tercatat (maksimum ${fmt(model.poldaCount)})</p>
+              ${categoryBars}
+            </div>
+          </article>
+          <article class="card">
+            <div class="band">${icon('grid')} KELENGKAPAN KATEGORI PER POLDA</div>
+            <div class="card-body">
+              <p class="note">Setiap segmen = 1 kategori dari total ${fmt(model.kategoriCount)} kategori</p>
+              <div class="polda-grid" style="grid-template-rows:repeat(${rows}, auto)">${poldaBars}</div>
+            </div>
+          </article>
+        </section>
+        <section class="bottom">
+          <article class="card">
+            <div class="band">${icon('table')} TABEL KETERSEDIAAN KATEGORI</div>
+            <div class="card-body">
+              <table class="avail"><thead><tr><th>Kategori</th><th>Input</th><th>Polda</th><th>Coverage</th></tr></thead><tbody>${tableRows}</tbody></table>
+            </div>
+          </article>
+          <article class="card">
+            <div class="band">${icon('rank')} RANKING INPUT PER POLDA</div>
+            <div class="card-body"><div class="rank-split">${rankTables}</div></div>
+          </article>
+        </section>
+        <section class="insight">
+          <div class="band">${icon('bulb')} INSIGHT</div>
+          <div class="insight-list">${insightRows}</div>
+        </section>
+      </div>
       <footer class="footer"><span>ALGORITMA ROAD SAFETY • ${esc(model.year)}</span><span>${esc(model.footerDate)}</span></footer>
     </article>`;
   }
@@ -378,8 +399,8 @@
         scale: 2,
         backgroundColor: '#e7f0fa',
         logging: false,
-        width: 1200,
-        windowWidth: 1200,
+        width: 1040,
+        windowWidth: 1040,
       });
       const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png'));
       if (!blob) throw new Error('Gambar laporan gagal dibuat.');
