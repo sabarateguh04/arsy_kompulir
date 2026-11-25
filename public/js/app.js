@@ -39,6 +39,7 @@ const els = {
   statusEmpty: document.getElementById('status-empty'),
   search: document.getElementById('search'),
   exportBtn: document.getElementById('export-btn'),
+  reportBtn: document.getElementById('report-btn'),
   pageSize: document.getElementById('page-size'),
   tbody: document.getElementById('tbody'),
   pager: document.getElementById('pager'),
@@ -99,6 +100,7 @@ function clearError() {
 function setLoading(on) {
   els.loadbar.hidden = !on;
   els.submit.disabled = on;
+  if (els.reportBtn) els.reportBtn.disabled = on;
   document.body.classList.toggle('is-loading', on);
 }
 
@@ -583,6 +585,31 @@ document.querySelector('thead').addEventListener('click', (event) => {
 });
 
 els.exportBtn.addEventListener('click', exportCsv);
+
+els.reportBtn.addEventListener('click', async () => {
+  if (!els.tanggal.value || !window.KompulirReport) return;
+  clearError();
+  setLoading(true);
+  const label = els.reportBtn.textContent;
+  els.reportBtn.textContent = 'Menyusun…';
+  try {
+    const tanggal = els.tanggal.value;
+    const current = state.payload;
+    const reusable = current
+      && current.filters.tanggal === tanggal
+      && current.filters.level === 'polda'
+      && current.filters.kategori === 'ALL';
+    const payload = reusable
+      ? current
+      : await readJson(await fetch(`/api/kompulir?${new URLSearchParams({ tanggal, level: 'polda' })}`));
+    await window.KompulirReport.save(payload);
+  } catch (err) {
+    showError(err.message || 'Gagal membuat laporan.');
+  } finally {
+    els.reportBtn.textContent = label;
+    setLoading(false);
+  }
+});
 
 els.pageSize.addEventListener('change', () => {
   state.pageSize = Number(els.pageSize.value) || 25;

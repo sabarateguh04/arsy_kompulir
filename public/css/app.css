@@ -126,6 +126,12 @@ main.wrap { margin-top: -28px; padding-bottom: 48px; }
   align-items: end;
 }
 
+.filter-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
 .field { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .field > span,
 .page-size span {

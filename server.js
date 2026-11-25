@@ -20,6 +20,10 @@ app.get('/vendor/chart.umd.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'node_modules', 'chart.js', 'dist', 'chart.umd.js'));
 });
 
+app.get('/vendor/html2canvas.min.js', (req, res) => {
+  res.sendFile(path.join(__dirname, 'node_modules', 'html2canvas', 'dist', 'html2canvas.min.js'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.use((err, req, res, next) => {
