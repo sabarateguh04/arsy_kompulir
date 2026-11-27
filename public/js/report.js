@@ -93,7 +93,53 @@
     return `<svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${paths[name] || ''}</svg>`;
   }
 
-  function buildModel(payload) {
+  function normPolda(value) {
+    return String(value || '—').trim().toUpperCase().replace(/^POLDA(?:\s+DAERAH)?\s+/, '');
+  }
+
+  function applySourceTotals(poldaMap, kategoriMap, summary) {
+    const poldaByNorm = new Map();
+    poldaMap.forEach((polda, key) => {
+      polda.input = 0;
+      polda.filled = new Set();
+      poldaByNorm.set(normPolda(key), polda);
+    });
+    kategoriMap.forEach((cat) => {
+      cat.input = 0;
+      cat.polda = new Set();
+    });
+    (summary.categories || []).forEach((item) => {
+      const cat = kategoriMap.get(item.key);
+      if (cat) cat.input = Number(item.jumlah) || 0;
+      (item.polda || []).forEach((row) => {
+        const jumlah = Number(row.jumlah) || 0;
+        const polda = poldaByNorm.get(normPolda(row.polda));
+        if (polda) polda.input += jumlah;
+        if (jumlah > 0 && polda && cat) {
+          cat.polda.add(polda.key);
+          polda.filled.add(item.key);
+        }
+      });
+    });
+  }
+
+  function trendOf(current, previous) {
+    if (previous == null) return { tone: 'flat', text: '—' };
+    const curr = Number(current) || 0;
+    const prev = Number(previous) || 0;
+    if (!prev && !curr) return { tone: 'flat', text: '0%' };
+    if (!prev) return { tone: 'up', text: 'baru' };
+    const pct = ((curr - prev) / prev) * 100;
+    const formatted = `${new Intl.NumberFormat('id-ID', {
+      minimumFractionDigits: 1,
+      maximumFractionDigits: 1,
+    }).format(Math.abs(pct))}%`;
+    if (pct > 0.05) return { tone: 'up', text: `▲ ${formatted}` };
+    if (pct < -0.05) return { tone: 'down', text: `▼ ${formatted}` };
+    return { tone: 'flat', text: '0%' };
+  }
+
+  function buildModel(payload, summary, previous) {
     const rows = payload.rows || [];
     const tanggal = payload.filters?.tanggal || '';
     const poldaMap = new Map();
@@ -127,10 +173,20 @@
       const kategori = kategoriMap.get(kategoriKey);
       polda.input += input;
       kategori.input += input;
-      if (input > 0) {
+      if (input > 0 && !summary) {
         polda.filled.add(kategoriKey);
         kategori.polda.add(poldaKey);
       }
+    });
+
+    if (summary) applySourceTotals(poldaMap, kategoriMap, summary);
+
+    const previousJumlah = new Map();
+    (previous?.categories || []).forEach((item) => {
+      previousJumlah.set(item.key, Number(item.jumlah) || 0);
+    });
+    kategoriMap.forEach((item) => {
+      item.trend = trendOf(item.input, previous ? (previousJumlah.get(item.key) || 0) : null);
     });
 
     const categories = [...kategoriMap.values()]
@@ -139,7 +195,9 @@
       .sort((a, b) => b.input - a.input || a.label.localeCompare(b.label, 'id'));
     const poldaCount = poldas.length;
     const kategoriCount = categories.length;
-    const totalInput = poldas.reduce((sum, item) => sum + item.input, 0);
+    const totalInput = summary
+      ? (summary.categories || []).reduce((sum, item) => sum + (Number(item.jumlah) || 0), 0)
+      : poldas.reduce((sum, item) => sum + item.input, 0);
     const filledCells = categories.reduce((sum, item) => sum + item.polda.size, 0);
     const cells = poldaCount * kategoriCount;
     const byFill = new Map();
@@ -268,7 +326,7 @@
     const tableRows = model.categories.map((item, index) => {
       const ratio = model.poldaCount ? item.polda.size / model.poldaCount : 0;
       const alt = index % 2 === 1 ? ' alt' : '';
-      return `<div class="ac${alt}">${esc(item.label)}</div><div class="ac n${alt}">${fmt(item.input)}</div><div class="ac n${alt}">${fmt(item.polda.size)}/${fmt(model.poldaCount)}</div><div class="ac n ${coverageClass(ratio)}${alt}">${percent(item.polda.size, model.poldaCount, 1)}</div>`;
+      return `<div class="ac${alt}">${esc(item.label)}</div><div class="ac n${alt}">${fmt(item.input)}</div><div class="ac n trend-${item.trend.tone}${alt}">${esc(item.trend.text)}</div><div class="ac n${alt}">${fmt(item.polda.size)}/${fmt(model.poldaCount)}</div><div class="ac n ${coverageClass(ratio)}${alt}">${percent(item.polda.size, model.poldaCount, 1)}</div>`;
     }).join('');
 
     const rankTables = ranks.map((list, side) => {
@@ -276,7 +334,7 @@
         const rank = side === 0 ? index + 1 : mid + index + 1;
         return `<tr><td>${rank}</td><td title="${esc(item.label)}">${esc(item.label)}</td><td>${fmt(item.input)}</td><td>${fmt(item.filled.size)}/${fmt(model.kategoriCount)}</td><td>${percent(item.input, model.totalInput, item.input && model.totalInput && (item.input / model.totalInput) < 0.1 ? 1 : 0)}</td></tr>`;
       }).join('');
-      return `<table class="rank-table"><thead><tr><th>#</th><th>Polda</th><th>Input</th><th>Kat.</th><th>%</th></tr></thead><tbody>${body}</tbody></table>`;
+      return `<table class="rank-table"><thead><tr><th>#</th><th>Polda</th><th>Jml</th><th>Kat.</th><th>%</th></tr></thead><tbody>${body}</tbody></table>`;
     }).join('');
 
     const insightRows = model.insights.map((item) => (
@@ -329,7 +387,8 @@
             <div class="card-body">
               <div class="avail-grid">
                 <div class="ah">Kategori</div>
-                <div class="ah n">Input</div>
+                <div class="ah n">Jumlah</div>
+                <div class="ah n">Tren</div>
                 <div class="ah n">Polda</div>
                 <div class="ah n">Coverage</div>
                 ${tableRows}
@@ -379,8 +438,8 @@
     });
   }
 
-  function mount(payload) {
-    const model = buildModel(payload);
+  function mount(payload, summary, previous) {
+    const model = buildModel(payload, summary, previous);
     const stage = document.getElementById('report-stage');
     stage.innerHTML = render(model);
     const sheet = stage.querySelector('.sheet');
@@ -388,12 +447,12 @@
     return sheet;
   }
 
-  async function save(payload) {
+  async function save(payload, summary, previous) {
     if (typeof window.html2canvas !== 'function') {
       throw new Error('Pustaka pembuat gambar laporan belum termuat.');
     }
-    const model = buildModel(payload);
-    const sheet = mount(payload);
+    const model = buildModel(payload, summary, previous);
+    const sheet = mount(payload, summary, previous);
     try {
       const canvas = await window.html2canvas(sheet, {
         scale: 2,

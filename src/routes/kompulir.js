@@ -1,6 +1,7 @@
 const express = require('express');
 const { query, ensureInfo, mapDbError } = require('../db');
 const { CATEGORIES, LEVELS } = require('../categories');
+const { loadSourceSummary, loadSourceDetail, SOURCES } = require('../sources');
 
 const router = express.Router();
 
@@ -187,6 +188,71 @@ router.get('/meta', asyncRoute(async (req, res) => {
     function: info.functionName,
     note: info.note,
   });
+}));
+
+function sourceLevel(value) {
+  const level = String(value || 'polres').trim().toLowerCase();
+  return LEVELS.includes(level) ? level : null;
+}
+
+async function cachedSource(key, loader) {
+  const hit = cache.get(key);
+  if (hit && hit.expires > Date.now()) return hit.value;
+  if (inflight.has(key)) return inflight.get(key);
+  const job = Promise.resolve()
+    .then(loader)
+    .then((value) => {
+      cache.set(key, { value, expires: Date.now() + CACHE_MS });
+      inflight.delete(key);
+      return value;
+    })
+    .catch((err) => {
+      inflight.delete(key);
+      throw err;
+    });
+  inflight.set(key, job);
+  return job;
+}
+
+router.get('/kompulir/sumber/detail', asyncRoute(async (req, res) => {
+  const info = await ensureInfo();
+  const tanggal = String(req.query.tanggal || info.today).trim();
+  const level = sourceLevel(req.query.level);
+  const key = String(req.query.kategori || '').trim().toUpperCase();
+  if (!isValidDate(tanggal)) {
+    return res.status(400).json({
+      error: 'Parameter tanggal tidak valid',
+      detail: 'Gunakan format YYYY-MM-DD, contoh 2026-11-25.',
+    });
+  }
+  if (!level) {
+    return res.status(400).json({
+      error: 'Parameter level tidak valid',
+      detail: 'Gunakan polres atau polda.',
+    });
+  }
+  if (!SOURCES.some((item) => item.key === key)) {
+    return res.status(400).json({
+      error: 'Parameter kategori tidak dikenal',
+      detail: 'Pilih salah satu kategori sumber.',
+    });
+  }
+  const category = await cachedSource(`sumber-detail|${tanggal}|${level}|${key}`, () => loadSourceDetail(tanggal, level, key));
+  res.json({ tanggal, level, category });
+}));
+
+router.get('/kompulir/sumber', asyncRoute(async (req, res) => {
+  const info = await ensureInfo();
+  const tanggal = String(req.query.tanggal || info.today).trim();
+  if (!isValidDate(tanggal)) {
+    return res.status(400).json({
+      error: 'Parameter tanggal tidak valid',
+      detail: 'Gunakan format YYYY-MM-DD, contoh 2026-11-25.',
+    });
+  }
+
+  const categories = await cachedSource(`sumber|${tanggal}`, () => loadSourceSummary(tanggal));
+  res.json({ tanggal, categories });
 }));
 
 router.get('/kompulir', asyncRoute(async (req, res) => {

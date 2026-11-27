@@ -193,7 +193,7 @@
 
 .sheet .bottom {
   display: grid;
-  grid-template-columns: minmax(0, 0.84fr) minmax(0, 1.16fr);
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 8px;
   margin-top: 8px;
   align-items: stretch;
@@ -259,7 +259,7 @@
 
 .sheet .avail-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 58px 70px 84px;
+  grid-template-columns: minmax(0, 1fr) 54px 64px 52px 66px;
   width: 100%;
 }
 
@@ -278,6 +278,17 @@
 .sheet .ah.n, .sheet .ac.n {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+.sheet .trend-up { color: #14804a; font-weight: 750; }
+.sheet .trend-down { color: #c0392b; font-weight: 750; }
+.sheet .trend-flat { color: #6b8298; }
+.sheet .ac.trend-up,
+.sheet .ac.trend-down,
+.sheet .ac.trend-flat {
+  font-size: 10px;
+  padding-left: 3px;
+  padding-right: 3px;
 }
 
 .sheet .ac.alt { background: #f6fafe; }

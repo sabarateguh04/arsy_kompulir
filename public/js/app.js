@@ -1,5 +1,15 @@
 const state = {
   payload: null,
+  sources: null,
+  sourcesDate: '',
+  sourceKey: '',
+  sourcePage: 1,
+  sourceQuery: '',
+  sourcePageSize: 25,
+  sourceSortKey: 'polda',
+  sourceSortDir: 'asc',
+  sourceDetails: new Map(),
+  sourceDetail: null,
   level: 'polres',
   query: '',
   status: 'all',
@@ -40,6 +50,12 @@ const els = {
   search: document.getElementById('search'),
   exportBtn: document.getElementById('export-btn'),
   reportBtn: document.getElementById('report-btn'),
+  sourceNote: document.getElementById('source-note'),
+  sourceNav: document.getElementById('source-nav'),
+  sourceDetail: document.getElementById('source-detail'),
+  sourceSearch: document.getElementById('source-search'),
+  sourcePageSize: document.getElementById('source-page-size'),
+  sourceExport: document.getElementById('source-export-btn'),
   pageSize: document.getElementById('page-size'),
   tbody: document.getElementById('tbody'),
   pager: document.getElementById('pager'),
@@ -153,11 +169,249 @@ async function load({ refresh }) {
     renderSummary(payload);
     renderCharts(payload);
     renderTable();
+    loadSources(payload.filters.tanggal);
   } catch (err) {
     showError(err.message || 'Gagal mengambil data kompulir.');
   } finally {
     setLoading(false);
   }
+}
+
+let sourceRequest = 0;
+let detailRequest = 0;
+
+function sourceDetailCacheKey(tanggal, level, key) {
+  return `${tanggal}|${level}|${key}`;
+}
+
+async function loadSources(tanggal) {
+  if (!tanggal || !els.sourceDetail) return;
+  const level = currentLevel();
+  if (state.sources && state.sourcesDate === tanggal) {
+    renderSourceTabs();
+    loadSourceDetail(state.sourceKey);
+    return;
+  }
+  const requestId = ++sourceRequest;
+  els.sourceNote.textContent = 'Memuat ringkasan sumber…';
+  els.sourceNav.innerHTML = '';
+  els.sourceDetail.innerHTML = '<p class="empty">Mengambil ringkasan jumlah.</p>';
+  els.sourceExport.disabled = true;
+  try {
+    const data = await readJson(await fetch(`/api/kompulir/sumber?${new URLSearchParams({ tanggal })}`));
+    if (requestId !== sourceRequest) return;
+    state.sources = data;
+    state.sourcesDate = tanggal;
+    state.sourceDetails = new Map();
+    state.sourceDetail = null;
+    const current = (data.categories || []).find((item) => item.key === state.sourceKey);
+    if (!current) {
+      const first = (data.categories || []).find((item) => item.jumlah) || data.categories?.[0];
+      state.sourceKey = first?.key || '';
+      state.sourcePage = 1;
+    }
+    renderSourceTabs();
+    loadSourceDetail(state.sourceKey);
+  } catch (err) {
+    if (requestId !== sourceRequest) return;
+    state.sources = null;
+    state.sourcesDate = '';
+    state.sourceDetail = null;
+    els.sourceNote.textContent = 'Rincian sumber gagal dimuat.';
+    els.sourceNav.innerHTML = '';
+    els.sourceDetail.innerHTML = `<p class="empty">${esc(err.message || 'Gagal mengambil rincian sumber.')}</p>`;
+    els.sourceExport.disabled = true;
+  }
+}
+
+async function loadSourceDetail(key) {
+  if (!key || !state.sourcesDate) return;
+  const level = currentLevel();
+  const cacheKey = sourceDetailCacheKey(state.sourcesDate, level, key);
+  const cached = state.sourceDetails.get(cacheKey);
+  if (cached) {
+    state.sourceDetail = cached;
+    renderSourceDetail(cached);
+    return;
+  }
+  const requestId = ++detailRequest;
+  els.sourceDetail.innerHTML = '<p class="empty">Memuat baris kategori…</p>';
+  els.sourceExport.disabled = true;
+  try {
+    const data = await readJson(await fetch(`/api/kompulir/sumber/detail?${new URLSearchParams({
+      tanggal: state.sourcesDate,
+      level,
+      kategori: key,
+    })}`));
+    if (requestId !== detailRequest || state.sourceKey !== key) return;
+    state.sourceDetails.set(cacheKey, data.category);
+    state.sourceDetail = data.category;
+    renderSourceDetail(data.category);
+  } catch (err) {
+    if (requestId !== detailRequest) return;
+    els.sourceDetail.innerHTML = `<p class="empty">${esc(err.message || 'Gagal mengambil baris kategori.')}</p>`;
+    els.sourceExport.disabled = true;
+  }
+}
+
+function sourceTabButton(category) {
+  const pressed = category.key === state.sourceKey;
+  return `<button type="button" role="tab" data-source="${esc(category.key)}" aria-pressed="${pressed}" class="${category.jumlah ? '' : 'is-empty'}">
+    <span>${esc(category.label)}</span>
+    <em>${fmt(category.jumlah)}</em>
+  </button>`;
+}
+
+function renderSourceTabs() {
+  const categories = state.sources?.categories || [];
+  const filled = categories.filter((item) => item.jumlah);
+  const empty = categories.filter((item) => !item.jumlah);
+  els.sourceNote.innerHTML = [
+    formatDate(state.sources?.tanggal, 'long'),
+    `${fmt(categories.length)} kategori`,
+    `level ${currentLevel()}`,
+  ].map((item) => `<span>${esc(item)}</span>`).join('');
+  els.sourceNav.innerHTML = [
+    filled.map(sourceTabButton).join(''),
+    empty.length && filled.length ? '<i class="source-nav-gap" aria-hidden="true"></i>' : '',
+    empty.map(sourceTabButton).join(''),
+  ].join('');
+  const active = els.sourceNav.querySelector('[aria-pressed="true"]');
+  if (active) {
+    const left = active.offsetLeft - 8;
+    const right = left + active.offsetWidth + 16;
+    if (left < els.sourceNav.scrollLeft) els.sourceNav.scrollLeft = left;
+    else if (right > els.sourceNav.scrollLeft + els.sourceNav.clientWidth) {
+      els.sourceNav.scrollLeft = right - els.sourceNav.clientWidth;
+    }
+  }
+}
+
+function renderSourceDetail(selected) {
+  if (!selected) {
+    els.sourceDetail.innerHTML = '<p class="empty">Pilih kategori.</p>';
+    els.sourceExport.disabled = true;
+    return;
+  }
+  const filtered = sourceSortedRows(selected, sourceFilteredRows(selected));
+  const pageSize = state.sourcePageSize;
+  const pages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  if (state.sourcePage > pages) state.sourcePage = pages;
+  if (state.sourcePage < 1) state.sourcePage = 1;
+  const start = (state.sourcePage - 1) * pageSize;
+  const slice = filtered.slice(start, start + pageSize);
+  const levelNote = currentLevel() === 'polda'
+    ? 'Jumlah diakumulasi per polda'
+    : 'Jumlah per polres';
+
+  const head = selected.columns.map((col) => {
+    const active = col.key === state.sourceSortKey;
+    const arrow = active ? (state.sourceSortDir === 'asc' ? '↑' : '↓') : '';
+    const sort = active ? (state.sourceSortDir === 'asc' ? 'ascending' : 'descending') : 'none';
+    return `<th class="${col.numeric ? 'num' : ''}" scope="col" aria-sort="${sort}"><button type="button" data-source-sort="${esc(col.key)}">${esc(col.label)} <span class="arrow">${arrow}</span></button></th>`;
+  }).join('');
+  const body = slice.length
+    ? slice.map((row) => (
+      `<tr>${selected.columns.map((col) => (
+        `<td class="${col.numeric ? 'num' : ''}">${esc(sourceCellText(col, row[col.key]))}</td>`
+      )).join('')}</tr>`
+    )).join('')
+    : `<tr><td class="empty-row" colspan="${selected.columns.length}">${state.sourceQuery.trim() ? 'Tidak ada baris yang cocok dengan pencarian.' : 'Tidak ada data pada tanggal ini.'}</td></tr>`;
+  const totals = sourceColumnTotals(selected.columns, filtered);
+  const labelIndex = selected.columns.findIndex((col) => !col.numeric);
+  const foot = selected.columns.map((col, index) => {
+    if (!col.numeric) {
+      return `<td>${index === labelIndex ? 'Subtotal' : ''}</td>`;
+    }
+    return `<td class="num">${fmt(totals.get(col.key))}</td>`;
+  }).join('');
+  const countLabel = state.sourceQuery.trim()
+    ? `${fmt(filtered.length)} dari ${fmt(selected.rows.length)} baris`
+    : `${fmt(selected.rows.length)} baris`;
+  const range = filtered.length
+    ? `${fmt(start + 1)}–${fmt(start + slice.length)} dari ${fmt(filtered.length)}`
+    : '0 baris';
+  const pager = `<div class="pager source-pager">
+    <button type="button" data-source-page="${state.sourcePage - 1}" ${state.sourcePage <= 1 ? 'disabled' : ''}>Sebelumnya</button>
+    <span>${range}</span>
+    <button type="button" data-source-page="${state.sourcePage + 1}" ${state.sourcePage >= pages ? 'disabled' : ''}>Berikutnya</button>
+  </div>`;
+
+  els.sourceDetail.innerHTML = `<article class="source-detail">
+    <header>
+      <h3>${esc(selected.label)}</h3>
+      <span>${levelNote} · ${countLabel}</span>
+    </header>
+    <div class="table-wrap source-scroll">
+      <table>
+        <thead><tr>${head}</tr></thead>
+        <tbody>${body}</tbody>
+        <tfoot><tr>${foot}</tr></tfoot>
+      </table>
+    </div>
+    ${pager}
+  </article>`;
+  els.sourceExport.disabled = !filtered.length;
+}
+
+function exportSourceCsv() {
+  const selected = state.sourceDetail;
+  if (!selected || selected.key !== state.sourceKey) return;
+  const rows = sourceSortedRows(selected, sourceFilteredRows(selected));
+  if (!rows.length) return;
+  const header = selected.columns.map((col) => csvCell(col.label)).join(';');
+  const body = rows.map((row) => selected.columns.map((col) => csvCell(sourceCellText(col, row[col.key]))).join(';')).join('\r\n');
+  const totals = sourceColumnTotals(selected.columns, rows);
+  const labelIndex = selected.columns.findIndex((col) => !col.numeric);
+  const totalRow = selected.columns.map((col, index) => csvCell(
+    col.numeric ? fmt(totals.get(col.key)) : (index === labelIndex ? 'Subtotal' : '')
+  )).join(';');
+  const blob = new Blob([`\uFEFF${header}\r\n${body}\r\n${totalRow}`], { type: 'text/csv;charset=utf-8' });
+  const slug = String(selected.key || 'sumber').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.href = url;
+  link.download = `sumber-${state.sourcesDate || 'tanggal'}-${currentLevel()}-${slug}.csv`;
+  link.click();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+function sourceColumnTotals(columns, rows) {
+  const totals = new Map();
+  columns.forEach((col) => {
+    if (!col.numeric) return;
+    totals.set(col.key, rows.reduce((sum, row) => sum + (Number(row[col.key]) || 0), 0));
+  });
+  return totals;
+}
+
+function sourceCellText(column, raw) {
+  if (raw == null || raw === '') return '—';
+  return column.numeric ? fmt(raw) : String(raw);
+}
+
+function sourceFilteredRows(category) {
+  const query = state.sourceQuery.trim().toLowerCase();
+  if (!query) return category.rows;
+  return category.rows.filter((row) => category.columns.some((column) => (
+    sourceCellText(column, row[column.key]).toLowerCase().includes(query)
+  )));
+}
+
+function sourceSortedRows(category, rows) {
+  const column = category.columns.find((item) => item.key === state.sourceSortKey)
+    || category.columns.find((item) => item.key === 'polda')
+    || category.columns[0];
+  if (!column) return rows;
+  state.sourceSortKey = column.key;
+  const dir = state.sourceSortDir === 'asc' ? 1 : -1;
+  return rows.slice().sort((a, b) => {
+    if (column.numeric) return ((Number(a[column.key]) || 0) - (Number(b[column.key]) || 0)) * dir;
+    return String(a[column.key] ?? '').localeCompare(String(b[column.key] ?? ''), 'id', {
+      numeric: true,
+      sensitivity: 'base',
+    }) * dir;
+  });
 }
 
 function renderSummary(payload) {
@@ -200,9 +454,30 @@ function barSeries(payload) {
     action: 'wilayah',
     value: item.nama.includes(' · ') ? item.nama.split(' · ')[0] : item.nama,
   }));
-  if (items.length <= 12) return items;
-  const rest = items.slice(12).reduce((sum, item) => sum + item.total_rows, 0);
-  return [...items.slice(0, 12), { label: 'Lainnya', total_rows: rest, action: null, value: null }];
+  return items.slice(0, 12);
+}
+
+function chartLines(label) {
+  const text = String(label || '—');
+  const [head, tail] = text.split(' · ');
+  const parts = [head];
+  if (tail && !head.toUpperCase().includes(tail.toUpperCase())) parts.push(tail);
+  const lines = [];
+  parts.forEach((part) => {
+    const words = part.trim().split(/\s+/).filter(Boolean);
+    let line = '';
+    words.forEach((word) => {
+      const next = line ? `${line} ${word}` : word;
+      if (next.length > 24 && line) {
+        lines.push(line);
+        line = word;
+      } else {
+        line = next;
+      }
+    });
+    if (line) lines.push(line);
+  });
+  return lines.slice(0, 2);
 }
 
 function barColor(item) {
@@ -221,16 +496,19 @@ function renderCharts(payload) {
   els.chartTitle.textContent = useKategori
     ? 'Total baris per kategori'
     : `Total baris per ${payload.filters.level === 'polda' ? 'Polda' : 'Polres'}`;
+  const wilayahCount = payload.by_wilayah?.length || series.length;
+  const omitted = !useKategori ? Math.max(0, wilayahCount - series.length) : 0;
   els.chartSub.textContent = useKategori
     ? 'Klik batang untuk menyaring kategori'
-    : series.some((item) => !item.action)
-      ? `Klik batang untuk menyaring tabel. 12 ${payload.filters.level} teratas, sisanya digabung`
+    : omitted
+      ? `Klik batang untuk menyaring tabel. ${fmt(series.length)} tertinggi dari ${fmt(wilayahCount)} ${payload.filters.level}`
       : `Klik batang untuk menyaring tabel per ${payload.filters.level}`;
 
   els.barBox.hidden = !hasRows;
   els.chartEmpty.hidden = hasRows;
   if (hasRows) {
-    els.barBox.style.height = `${Math.max(320, series.length * 28 + 36)}px`;
+    const tall = series.some((item) => chartLines(item.label).length > 1);
+    els.barBox.style.height = `${Math.max(280, series.length * (tall ? 48 : 34) + 52)}px`;
     drawBar(series);
   } else if (state.charts.bar) {
     releaseChart('bar');
@@ -301,12 +579,30 @@ function drawBar(series) {
         data: series.map((item) => item.total_rows),
         backgroundColor: series.map(barColor),
         borderRadius: 6,
-        maxBarThickness: 18,
+        maxBarThickness: 16,
+        categoryPercentage: 0.7,
+        barPercentage: 0.9,
       }],
     },
+    plugins: [{
+      id: 'barValue',
+      afterDatasetsDraw(chart) {
+        const { ctx } = chart;
+        const meta = chart.getDatasetMeta(0);
+        ctx.save();
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '12px "Segoe UI", sans-serif';
+        ctx.textBaseline = 'middle';
+        meta.data.forEach((bar, index) => {
+          ctx.fillText(fmt(chart.data.datasets[0].data[index]), bar.x + 8, bar.y);
+        });
+        ctx.restore();
+      },
+    }],
     options: {
       indexAxis: 'y',
       maintainAspectRatio: false,
+      layout: { padding: { right: 56 } },
       animation: false,
       interaction: { mode: 'nearest', axis: 'y', intersect: false },
       onHover(event, elements) {
@@ -332,6 +628,7 @@ function drawBar(series) {
       },
       scales: {
         x: {
+          grace: '18%',
           grid: { color: '#eef2f6' },
           border: { display: false },
           ticks: { callback: (value) => fmt(value) },
@@ -341,9 +638,10 @@ function drawBar(series) {
           border: { display: false },
           ticks: {
             autoSkip: false,
+            padding: 12,
+            font: { size: 12, lineHeight: 1.25 },
             callback(value) {
-              const label = this.getLabelForValue(value);
-              return label.length > 34 ? `${label.slice(0, 32)}…` : label;
+              return chartLines(this.getLabelForValue(value));
             },
           },
         },
@@ -586,6 +884,61 @@ document.querySelector('thead').addEventListener('click', (event) => {
 
 els.exportBtn.addEventListener('click', exportCsv);
 
+let sourceSearchTimer = 0;
+els.sourceSearch.addEventListener('input', () => {
+  window.clearTimeout(sourceSearchTimer);
+  sourceSearchTimer = window.setTimeout(() => {
+    state.sourceQuery = els.sourceSearch.value;
+    state.sourcePage = 1;
+    if (state.sourceDetail) renderSourceDetail(state.sourceDetail);
+  }, 120);
+});
+
+els.sourcePageSize.addEventListener('change', () => {
+  state.sourcePageSize = Number(els.sourcePageSize.value) || 25;
+  state.sourcePage = 1;
+  if (state.sourceDetail) renderSourceDetail(state.sourceDetail);
+});
+
+els.sourceExport.addEventListener('click', exportSourceCsv);
+
+els.sourcePanel = document.getElementById('source-panel');
+els.sourcePanel.addEventListener('click', (event) => {
+  const categoryBtn = event.target.closest('[data-source]');
+  if (categoryBtn) {
+    state.sourceKey = categoryBtn.dataset.source;
+    state.sourcePage = 1;
+    renderSourceTabs();
+    loadSourceDetail(state.sourceKey);
+    return;
+  }
+  const sortBtn = event.target.closest('[data-source-sort]');
+  if (sortBtn) {
+    const key = sortBtn.dataset.sourceSort;
+    if (state.sourceSortKey === key) {
+      state.sourceSortDir = state.sourceSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+      state.sourceSortKey = key;
+      state.sourceSortDir = 'asc';
+    }
+    state.sourcePage = 1;
+    if (state.sourceDetail) renderSourceDetail(state.sourceDetail);
+    return;
+  }
+  const pageBtn = event.target.closest('[data-source-page]');
+  if (!pageBtn || pageBtn.disabled) return;
+  state.sourcePage = Number(pageBtn.dataset.sourcePage);
+  if (state.sourceDetail) renderSourceDetail(state.sourceDetail);
+});
+
+function previousDay(iso) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!match) return '';
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().slice(0, 10);
+}
+
 els.reportBtn.addEventListener('click', async () => {
   if (!els.tanggal.value || !window.KompulirReport) return;
   clearError();
@@ -599,10 +952,17 @@ els.reportBtn.addEventListener('click', async () => {
       && current.filters.tanggal === tanggal
       && current.filters.level === 'polda'
       && current.filters.kategori === 'ALL';
-    const payload = reusable
-      ? current
-      : await readJson(await fetch(`/api/kompulir?${new URLSearchParams({ tanggal, level: 'polda' })}`));
-    await window.KompulirReport.save(payload);
+    const loadJson = async (url) => readJson(await fetch(url));
+    const [payload, summary, previous] = await Promise.all([
+      reusable
+        ? current
+        : loadJson(`/api/kompulir?${new URLSearchParams({ tanggal, level: 'polda' })}`),
+      state.sources && state.sourcesDate === tanggal
+        ? state.sources
+        : loadJson(`/api/kompulir/sumber?${new URLSearchParams({ tanggal })}`),
+      loadJson(`/api/kompulir/sumber?${new URLSearchParams({ tanggal: previousDay(tanggal) })}`).catch(() => null),
+    ]);
+    await window.KompulirReport.save(payload, summary, previous);
   } catch (err) {
     showError(err.message || 'Gagal membuat laporan.');
   } finally {

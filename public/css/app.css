@@ -473,8 +473,8 @@ th[aria-sort="ascending"] button,
 th[aria-sort="descending"] button { color: var(--teal-deep); }
 .arrow { width: 0.8em; color: var(--teal); }
 tbody tr:hover { background: #f3fbf9; }
-td.num, th:nth-child(5) { text-align: right; font-variant-numeric: tabular-nums; }
-th:nth-child(5) button { width: 100%; justify-content: flex-end; }
+.table-panel td.num, .table-panel th:nth-child(5) { text-align: right; font-variant-numeric: tabular-nums; }
+.table-panel th:nth-child(5) button { width: 100%; justify-content: flex-end; }
 td.clip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .empty-row { text-align: center; color: var(--ink-soft); padding: 28px 12px; }
 
@@ -518,7 +518,134 @@ td.clip { max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-spa
 
 body.is-loading .kpis,
 body.is-loading .charts,
-body.is-loading .table-panel { opacity: 0.72; }
+body.is-loading .table-panel,
+body.is-loading .source-panel { opacity: 0.72; }
+
+.source-panel { margin-top: 14px; padding: 18px 18px 16px; }
+.source-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.source-panel .section-head {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+}
+#source-note {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+  gap: 6px;
+}
+#source-note span {
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: #f4f7fb;
+  color: var(--ink-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.source-nav {
+  display: flex;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 14px;
+  padding: 6px;
+  overflow-x: auto;
+  background: #f4f7fb;
+  border-radius: 16px;
+  scrollbar-width: none;
+  mask-image: linear-gradient(to right, #000 calc(100% - 36px), transparent);
+}
+.source-nav::-webkit-scrollbar { display: none; }
+.source-nav-gap {
+  flex: 0 0 1px;
+  align-self: stretch;
+  margin: 6px 4px;
+  background: #dbe3ee;
+}
+.source-toolbar { margin-bottom: 12px; }
+.source-nav button {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  width: auto;
+  padding: 7px 8px 7px 12px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  text-align: left;
+  font-size: 13px;
+  font-weight: 650;
+  white-space: nowrap;
+  color: var(--ink);
+}
+.source-nav button em {
+  font-style: normal;
+  font-variant-numeric: tabular-nums;
+  font-weight: 750;
+  color: var(--teal-deep);
+  font-size: 12px;
+  min-width: 1.5em;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--teal-soft);
+  text-align: center;
+}
+.source-nav button.is-empty { color: #94a3b8; font-weight: 600; }
+.source-nav button.is-empty em { background: transparent; color: #b6c2d2; font-weight: 650; }
+.source-nav button:hover:not([aria-pressed="true"]) {
+  background: #fff;
+  border-color: #e2e8f0;
+}
+.source-nav button[aria-pressed="true"] {
+  background: var(--teal);
+  border-color: var(--teal);
+  color: #fff;
+}
+.source-nav button[aria-pressed="true"] em {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.2);
+}
+.source-detail header {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+.source-detail h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 720;
+  letter-spacing: -0.02em;
+}
+.source-detail header span {
+  color: var(--ink-soft);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.source-scroll { max-height: 420px; }
+.source-scroll table { width: 100%; min-width: 0; }
+.source-scroll th, .source-scroll td { overflow-wrap: break-word; }
+.source-scroll td.num, .source-scroll th.num { text-align: right; white-space: nowrap; }
+.source-scroll tfoot td {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  background: #ecf8f6;
+  color: var(--ink);
+  font-weight: 750;
+  font-variant-numeric: tabular-nums;
+  border-top: 2px solid var(--teal);
+  box-shadow: 0 -8px 12px rgba(15, 23, 42, 0.04);
+}
+.source-scroll th.num button { width: 100%; justify-content: flex-end; }
+.source-pager { justify-content: space-between; align-items: center; }
+.source-pager span { color: var(--ink-soft); font-size: 13px; font-variant-numeric: tabular-nums; }
 
 @media (max-width: 980px) {
   .filters-grid, .kpis, .charts, .donut-layout { grid-template-columns: 1fr; }
